@@ -1,0 +1,52 @@
+version: "3.8"
+
+services:
+  ism-adapter:
+    container_name: ism-adapter
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ism-adapter:${IMAGE_TAG:-latest}
+    security_opt:
+      - seccomp:unconfined
+    restart: unless-stopped
+    environment:
+      - TZ=UTC
+      - UV_UNSAFE_NO_IO_URING=1
+      # local: 테스트 KMS(DEV_KMS_*)를 사용한다.
+      - BUILD_TYPE=local
+      # KMS 자격증명은 .env에 평문으로 두지 않고 구동 시 호스트 셸 변수로 주입한다.
+      #   source .secret  (또는 export DEV_KMS_*=...) 후 docker compose up
+      - DEV_KMS_ENDPOINT=${DEV_KMS_ENDPOINT:-}
+      - DEV_KMS_ENGINE=${DEV_KMS_ENGINE:-}
+      - DEV_KMS_ROLE_ID=${DEV_KMS_ROLE_ID:-}
+      - DEV_KMS_ROLE_SECRET=${DEV_KMS_ROLE_SECRET:-}
+    env_file:
+      - .env
+    volumes:
+      - .:/ism-adapter
+      # 이미지에 빌드된 .venv를 코드 볼륨 마운트가 가리지 않도록 익명 볼륨으로 보호
+      - /ism-adapter/.venv
+      - ./logs:/ism-adapter/logs
+    # 로컬 개발용: 컨테이너만 띄워두고 개발자가 직접 CLI를 실행한다.
+    # (이 서비스는 상시 서버가 아니라 배치 CLI이므로 기동과 동시에 돌리지 않는다)
+    #   docker exec -it ism-adapter bash
+    #   uv sync                                                       # uv.lock이 없으면 최초 생성됨
+    #   python -m ism_adapter.cli accounts                            # 계정 push(전체 대상, 기간 없음)
+    #   python -m ism_adapter.cli resources --resource-type=network,router  # 정기 배치(전일 하루치)
+    #   python -m ism_adapter.cli resources --resource-type=network --period-start=... --period-end=...
+    entrypoint: ["tail", "-f", "/dev/null"]
+    networks:
+      - default
+      # ixcs-api-service의 portal_db에 컨테이너 이름/호스트로 접근하기 위해 연결.
+      # (metering-api는 로컬 컨테이너가 아니라 dev 클러스터의 외부 주소를
+      # METERING_API_HOST로 직접 호출하므로 별도 네트워크 연결이 필요 없다)
+      - ixcloud-portal-network
+
+networks:
+  default:
+    name: ism-adapter-network
+    external: true
+  ixcloud-portal-network:
+    name: ixcloud-portal-network
+    external: true

@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+
+# Virtual environments
+.venv/
+venv/
+
+# uv
+.uv/
+
+# Logs
+logs/
+ism_adapter/logs/
+
+# Environment variables (시크릿 포함)
+.env
+.env.*
+!.env.sample
+
+# 시크릿 (KMS 자격증명 등 — source 해서 사용)
+.secret
+*.secret
+
+# Claude Code (로컬 에이전트 설정)
+.claude/
+
+# IDE
+.idea/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
