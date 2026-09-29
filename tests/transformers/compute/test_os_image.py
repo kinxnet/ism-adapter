@@ -75,3 +75,25 @@ def test_rebuild_with_different_image_reuses_same_mid():
     rebuilt = OsImageTransformer().to_resource_payload(rebuilt_usage, _PROJECT)
 
     assert original.mid == rebuilt.mid
+
+
+def test_detail_carries_image_reference_fields_on_both_items():
+    """mID에는 이미지 참조를 인코딩하지 않지만(위 테스트),
+    `arDetailInfo.detail`에는 `base.py`의 기존 원칙(legacy DB 컬럼을 그대로
+    싣는다)에 따라 base_image_ref/base_image_name/os_type을 resource/metering
+    양쪽 모두에 그대로 실어야 한다 — 코드 리뷰 반영, 있는 데이터를 빼지 않는다."""
+    payload = OsImageTransformer().to_resource_payload(_USAGE, _PROJECT)
+
+    resource_detail = payload.resource_item["resource"]["arDetailInfo"]["detail"]
+    metering_detail = payload.metering_item["metering"]["arDetailInfo"]["detail"]
+
+    for detail in (resource_detail, metering_detail):
+        assert detail["base_image_ref"] == "image-ref-uuid"
+        assert detail["base_image_name"] == "windows2019std"
+        assert detail["os_type"] == "windows"
+
+    # legacy의 detect_os_db 기반 windows_type/server_type/sql_type 파싱은
+    # 미터링/어댑터 영역이 아니므로(legacy-metering-analysis.md) 넣지 않는다.
+    assert "windows_type" not in resource_detail
+    assert "server_type" not in resource_detail
+    assert "sql_type" not in metering_detail

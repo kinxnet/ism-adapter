@@ -18,6 +18,15 @@ push되어 이전 기간을 덮어쓰는 것 역시 legacy와 동일한 동작�
 resource/metering item 구조 자체는 `base.py::SimpleResourceTransformer`
 (network/router)와 동일하다 — mID 조립 방식만 달라 새 베이스 클래스를 두지
 않고 `ResourcePayload`/`_to_kst` 헬퍼만 재사용해 여기서 직접 조합한다.
+
+`arDetailInfo.detail`에는 `base.py`의 기존 원칙("legacy가 DB 컬럼을 그대로
+실은 것")에 따라 usage에 이미 들어있는 `base_image_ref`/`base_image_name`/
+`os_type`을 그대로 싣는다(mID에는 인코딩하지 않음 — 위 참고). legacy가 이
+값으로 하던 `detect_os_db` 기반 windows_type/server_type/sql_type 파싱은
+여기서 하지 않는다 — `kinx-ixcloud-metering` 레포의
+`legacy-metering-analysis.md`가 이 파싱을 미터링 영역이 아니라고 명시했고
+(duration/집계에 개입하지 않음, 호출 위치도 리소스 등록 경로), 이번
+스코프도 아니다.
 """
 
 from ism_adapter.repositories import ProjectInfo
@@ -54,6 +63,9 @@ class OsImageTransformer:
                         "resource_id": instance_id,
                         "display_name": usage.get("display_name"),
                         "resource_type": _RESOURCE_TYPE,
+                        "base_image_ref": usage.get("base_image_ref"),
+                        "base_image_name": usage.get("base_image_name"),
+                        "os_type": usage.get("os_type"),
                     }
                 },
             },
@@ -80,6 +92,9 @@ class OsImageTransformer:
                         "duration_sec": usage["durations"]["total"]["seconds"],
                         "resource_type": _RESOURCE_TYPE,
                         "charge_type": "Reserved",
+                        "base_image_ref": usage.get("base_image_ref"),
+                        "base_image_name": usage.get("base_image_name"),
+                        "os_type": usage.get("os_type"),
                     }
                 },
             },
