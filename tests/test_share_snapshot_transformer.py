@@ -61,7 +61,8 @@ class TestShareSnapshotTransformer:
         resource = resource_item["resource"]
         assert resource["mID"] == "share-snapshot-789"
         assert resource["sServiceType"] == "I"
-        assert resource["dtStart"] == "2026-01-01 00:00:00"
+        # dtStart is converted to KST (UTC+9), so 00:00:00 UTC becomes 09:00:00 KST
+        assert resource["dtStart"] == "2026-01-01 09:00:00"
         assert resource["dtEnd"] is None  # Not deleted
         assert "arDetailInfo" in resource
 
@@ -95,8 +96,9 @@ class TestShareSnapshotTransformer:
         assert metering["sResourceId"] == "share-snapshot-789"
         assert metering["sProviderId"] == "provider-456"
         assert metering["sTenantId"] == "tenant-001"
-        assert metering["dtPeriodStart"] == "2026-01-01 00:00:00"
-        assert metering["dtPeriodEnd"] == "2026-01-02 00:00:00"
+        # dtPeriodStart and dtPeriodEnd are converted to KST (UTC+9)
+        assert metering["dtPeriodStart"] == "2026-01-01 09:00:00"
+        assert metering["dtPeriodEnd"] == "2026-01-02 09:00:00"
         assert metering["nActiveSec"] == 86400
         assert metering["nSuspendSec"] == 0
         assert "arDetailInfo" in metering
@@ -124,9 +126,10 @@ class TestShareSnapshotTransformer:
             sample_share_snapshot_usage_deleted, sample_project
         )
 
-        # Check dtEnd is set for deleted resource
+        # Check dtEnd is set for deleted resource (converted to KST)
         resource = payload.resource_item["resource"]
-        assert resource["dtEnd"] == "2026-01-15 12:30:00"
+        # 12:30:00 UTC becomes 21:30:00 KST (UTC+9)
+        assert resource["dtEnd"] == "2026-01-15 21:30:00"
 
         # Check metering detail includes deleted_at
         detail = payload.resource_item["resource"]["arDetailInfo"]["detail"]

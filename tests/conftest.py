@@ -10,6 +10,7 @@ def sample_project() -> ProjectInfo:
     """Sample project for testing."""
     return ProjectInfo(
         project_id="project-123",
+        tenant_id="tenant-123",
         provider_id="provider-456",
     )
 
