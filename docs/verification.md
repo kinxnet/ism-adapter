@@ -157,11 +157,41 @@ WHERE sResourceId = '<push한 mID와 동일값>';
 
 ### volume_snapshot push — 실전 검증 기록
 
-- **2026-10-02**: dev metering-api → stage THAAD(testbed, dev DB 기준),
-  `resources --resource-type=volume_snapshot --period-start=2026-08-01 --period-end=2026-10-02`
-  실행. `total=13 pushed=13 resource_errors=10 metering_errors=10` — 10건은
+- **2026-10-02(1차)**: `resources --resource-type=volume_snapshot` 실행,
+  `total=13 pushed=13 resource_errors=10 metering_errors=10` — 10건은
   Contract 미등록(알려진 상태), 3건은 실제 THAAD 레코드 생성 확인
   (nResourceSeq 425480~425482).
+- **2026-10-02(2차, contract push 실행 후)**: 재실행 결과
+  `total=13 pushed=13 resource_errors=0 metering_errors=0` — 전건 성공.
+
+### share_snapshot push — 실전 검증 기록 및 버그 수정
+
+- **2026-10-02(1차)**: `resources --resource-type=share_snapshot` 실행,
+  `total=2 pushed=2 resource_errors=2`(전건 실패) — `"No query results for
+  model [Product]"`. THAAD에 등록된 상품(nProductSeq=352, "NAS 스냅샷",
+  카테고리 87)은 `attribute.resource_type == "nas_snapshot"`로 매칭하는데,
+  기존 구현이 `SimpleResourceTransformer`를 상속해 내부 키 이름
+  (`"share_snapshot"`)을 detail에 그대로 썼던 게 원인 — 코드 버그로 확정,
+  수정(`share.py`가 이미 쓰던 `_THAAD_RESOURCE_TYPE` 하드코딩 패턴 적용).
+- **2026-10-02(2차, 수정 후)**: `total=2 pushed=2 resource_errors=0
+  metering_errors=0` — 전건 성공.
+
+### lbaasv2_loadbalancer push — 실전 검증 기록 및 버그 수정
+
+- **2026-10-02(1차)**: `resources --resource-type=loadbalancer` 실행,
+  `total=45 pushed=41 resource_errors=41`(전건 실패) — `"No query results
+  for model [Product]"`. THAAD 상품(236~239, Basic/Standard/Premium/
+  CloudJ, 카테고리 48)은 `attribute.resource_type == "lbaas"` **그리고**
+  `attribute.lb_provider`(각 provider 값) 둘 다로 매칭하는데, 기존 구현은
+  resource_type에 내부 키 이름(`"loadbalancer"`)을 쓰고 lb_provider는
+  mID에만 넣고 detail엔 안 실었음 — 코드 버그로 확정, 수정.
+- **2026-10-02(2차, 수정 후)**: `total=45 pushed=41 resource_errors=1` —
+  1건만 남음: `"Column 'sValue' cannot be null"`(THAAD DB 제약, `sValue`는
+  `detail.display_name`에서 채워지는데 kube-service 자동 생성 LB 등
+  `display_name`이 없는 자원이 실제로 있었음). legacy `share.py`와 동일한
+  폴백(없으면 resource_id)을 적용해 수정.
+- **2026-10-02(3차, 수정 후)**: `total=45 pushed=41 resource_errors=0
+  metering_errors=0` — 전건 성공(nResourceSeq 426077~426095 등).
 
 ## volume push — 실전 검증 기록
 
