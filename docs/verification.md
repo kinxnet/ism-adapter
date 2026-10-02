@@ -245,3 +245,38 @@ THAAD 상품(195~500번대, 다수)은 `resource_type=="instance"` **그리고**
   있다. On_demand 인스턴스가 있는 기간으로 재검증하거나, THAAD DB에서
   실제 생성된 레코드의 `nProductSeq`가 On_demand 계열 상품(195/197/199...)
   을 포함하는지 확인 필요.
+
+### os_image push — 실전 검증 기록
+
+os_image는 metering-api 쪽 N+1 타임아웃(#109/#112, 2026-10-02 수정·배포)이
+풀린 뒤 재검증했다. 쿼리 자체는 0.46초로 정상 응답했지만, push된 19건
+전부가 THAAD `ModelNotFoundException: No query results for model [Product]`로
+실패했고 전부 `os_type: "linux"`였다.
+
+legacy(`ixcloud_service/common/ixcdaemon/ism/resource.py::run_os_image`,
+`ism/metering.py::run_os_image`)를 확인한 결과 **os_image는 범용 이미지
+사용량이 아니라 Windows 라이선스 과금**이다 — `os_type IN ('windows',
+'windosw', 'winddows', 'window')`로 조회 자체를 필터링하고, `custom` 접두
+이미지와 무과금 테넌트 1곳(`OSIMAGE_FREE_TENANTS`)을 제외하며, THAAD 상품
+매칭에 `windows_type`/`server_type`/`server_version`/`sql_type`/
+`sql_version`(이미지명 파싱, `detect_os_db()`)까지 쓴다.
+
+metering-api 쪽에는 필터링 책임이 없다고 판단해(billing/policy 영역, 이미
+`base_image_name`/`os_type`을 주고 있어 metering-api 수정 불필요)
+ism-adapter의 `is_excluded` 훅과 `detect_os_db()` 포팅으로 전부 구현했다
+(커밋 `29981e5`, `feat/8-os-image`).
+
+- **2026-10-02**: `resources --resource-type=os_image` 1주일
+  (`2026-09-01~2026-09-08`, `total=21`)과 2개월(`2026-08-01~2026-10-02`,
+  `total=115`) 범위 모두 재실행 — **115건 전부 linux라 is_excluded로
+  걸러져 `pushed=0 skipped_excluded=115 resource_errors=0
+  metering_errors=0`.** 잘못 push되던 것(Product not found 에러)이 전부
+  제외로 바뀐 것은 확인했다.
+- **⚠️ 미확인 잔여 리스크**: dev 환경에 Windows os_image 데이터 자체가
+  없어(2026-01-01~2026-10-02 전체 조회로 확인, 115건 전부 `os_type=linux`)
+  **Windows 이미지가 실제로 THAAD에 성공적으로 매칭·생성되는 happy path는
+  검증하지 못했다.** `is_excluded`가 비Windows를 올바르게 거르는 것만
+  확인된 상태다. THAAD의 os_image/Windows 라이선스 상품 카탈로그(카테고리
+  미확인)에서 실제 속성명이 `windows_type`/`server_type`/`server_version`/
+  `sql_type`/`sql_version`과 정확히 일치하는지도 아직 확인 전이다 — 카탈로그
+  조회 후 속성명 재확인 필요.
