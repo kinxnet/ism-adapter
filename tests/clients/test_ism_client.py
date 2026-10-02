@@ -1,9 +1,10 @@
-"""THAAD가 배치 중 일부만 실패해도 HTTP 400을 내리는 경우를 고정하는 테스트.
+"""THAAD가 배치 중 일부만 실패해도 HTTP 상태코드가 그 실패 severity를
+따라가는 경우(400, 500 둘 다)를 고정하는 테스트.
 
-2026-10-02 dev 실측: Contract 미등록 project가 섞인 배치를 push했더니
-THAAD가 성공/실패가 섞인 리스트를 본문에 담으면서도 HTTP 상태를 400으로
-내렸다. 이전 가정("개별 에러는 HTTP 상태코드에 안 섞인다")이 이 경우엔
-틀렸다는 걸 재현한다.
+2026-10-02 dev 실측: Contract 미등록 project가 섞인 배치는 400을, 등록
+안 된 product(volume_type 등)를 가리키는 배치는 500을 반환했는데, 둘 다
+본문에는 성공/실패가 섞인 리스트를 그대로 담고 있었다. 이전 가정
+("개별 에러는 HTTP 상태코드에 안 섞인다")이 틀렸다는 걸 재현한다.
 """
 
 import httpx
@@ -45,9 +46,33 @@ def test_put_resources_recovers_mixed_success_error_batch_on_http_400(client):
 
 
 @respx.mock
-def test_put_resources_still_raises_on_non_400_error(client):
+def test_put_resources_recovers_mixed_success_error_batch_on_http_500(client):
+    mixed_body = [
+        {"nResourceSeq": 1, "mID": "ok-1"},
+        {
+            "error": {
+                "classname": "Illuminate\\Database\\Eloquent\\ModelNotFoundException",
+                "message": "No query results for model [Product].",
+                "status_code": 500,
+            },
+            "payload": {"resource": {"mID": "no-product-1"}},
+        },
+    ]
     respx.post(f"{_BASE_URL}/resources").mock(
-        return_value=httpx.Response(500, text="boom")
+        return_value=httpx.Response(500, json=mixed_body)
+    )
+
+    result = client.put_resources(
+        [{"resource": {"mID": "ok-1"}}, {"resource": {"mID": "no-product-1"}}]
+    )
+
+    assert result == mixed_body
+
+
+@respx.mock
+def test_put_resources_still_raises_on_untolerated_status_code(client):
+    respx.post(f"{_BASE_URL}/resources").mock(
+        return_value=httpx.Response(503, text="service unavailable")
     )
 
     with pytest.raises(httpx.HTTPStatusError):
@@ -58,6 +83,16 @@ def test_put_resources_still_raises_on_non_400_error(client):
 def test_put_resources_raises_on_400_with_non_list_body(client):
     respx.post(f"{_BASE_URL}/resources").mock(
         return_value=httpx.Response(400, json={"error": "not a list"})
+    )
+
+    with pytest.raises(httpx.HTTPStatusError):
+        client.put_resources([{"resource": {"mID": "x"}}])
+
+
+@respx.mock
+def test_put_resources_raises_on_500_with_unparseable_body(client):
+    respx.post(f"{_BASE_URL}/resources").mock(
+        return_value=httpx.Response(500, text="boom")
     )
 
     with pytest.raises(httpx.HTTPStatusError):
