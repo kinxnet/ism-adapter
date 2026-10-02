@@ -107,6 +107,21 @@ LIMIT 40;
   이후에도 해당 nAccountSeq로 신규 레코드가 생기지 않아 "반영 안 됨" 판단을
   재확인.
 
+## contract push (`ism_adapter.cli contracts`)
+
+계정 다음, 자원/사용량 push보다 먼저 실행되어야 한다 — THAAD가 자원 등록
+시 project의 계약(tServiceMap sType='Contract')이 먼저 있는지 확인하기
+때문이다(없으면 `ServiceMap not found`로 거절).
+
+### 실전 검증 기록
+
+- **2026-10-02**: 코드는 있었으나(최초 커밋 이후 무수정) 실행 기록이 없던
+  상태였음 — dev portal_db(+billing_db) → stage THAAD, `python -m
+  ism_adapter.cli contracts` 최초 실행. `total=164 success=164`, 전건
+  성공(첫 실패 시 즉시 중단하는 설계라 끝까지 돌았다는 것 자체가 전건
+  성공의 증거). 이후 volume push 재실행 시 `ServiceMap not found` 133건이
+  전부 해소되어(→0건) 계약 등록이 실제 원인이었음을 교차 확인함.
+
 ## resource/metering push 공통 (`ism_adapter.cli resources --resource-type=...`)
 
 ### 영향받는 테이블
@@ -164,3 +179,6 @@ WHERE sResourceId = '<push한 mID와 동일값>';
   재실행 결과 `total=670 pushed=582 resource_errors=133 metering_errors=133`
   — `Product not found` 완전히 해소(449→0), 449건 실제 THAAD 레코드 생성
   확인(nResourceSeq 425483 이후). 남은 133건은 Contract 미등록(알려진 상태).
+- **2026-10-02(3차, contract push 실행 후)**: `contracts` 실행(위 섹션
+  참고)으로 164개 project 전체 계약 등록 후 재실행. `total=670 pushed=582
+  resource_errors=0 metering_errors=0` — **전건 성공.**
