@@ -11,6 +11,7 @@ third_party. (Keymanager는 유일한 자원 secret이 "과금 무관, 대상 �
 """
 
 from ism_adapter.transformers.base import ResourcePayload, SimpleResourceTransformer
+from ism_adapter.transformers.compute import TRANSFORMERS as _COMPUTE_TRANSFORMERS
 from ism_adapter.transformers.network import TRANSFORMERS as _NETWORK_TRANSFORMERS
 from ism_adapter.transformers.share import TRANSFORMERS as _SHARE_TRANSFORMERS
 from ism_adapter.transformers.storage import TRANSFORMERS as _STORAGE_TRANSFORMERS
@@ -19,6 +20,7 @@ TRANSFORMERS: dict[str, SimpleResourceTransformer] = {
     **_NETWORK_TRANSFORMERS,
     **_STORAGE_TRANSFORMERS,
     **_SHARE_TRANSFORMERS,
+    **_COMPUTE_TRANSFORMERS,
 }
 
 __all__ = ["ResourcePayload", "SimpleResourceTransformer", "TRANSFORMERS"]
