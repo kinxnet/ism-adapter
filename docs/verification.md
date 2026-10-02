@@ -224,3 +224,24 @@ UUID + `null`)로 매칭한다. metering-api `ShareMeteringDTO`에는
 - **2026-10-02(3차, contract push 실행 후)**: `contracts` 실행(위 섹션
   참고)으로 164개 project 전체 계약 등록 후 재실행. `total=670 pushed=582
   resource_errors=0 metering_errors=0` — **전건 성공.**
+
+### instance push — 실전 검증 기록
+
+THAAD 상품(195~500번대, 다수)은 `resource_type=="instance"` **그리고**
+`charge_type`(정확히 `"Reserved"` 또는 `"On_demand"`, 단 상품 221번은
+등록 자체가 `"On_Demand"`로 오타/불일치가 있음) **그리고**
+`instance_flavor_id`(목록, 예: `"r_01001"`, `"gpu_16062"`)로 매칭한다.
+
+- **2026-10-02**: `resources --resource-type=instance --period-start=2026-09-01 --period-end=2026-09-08`
+  실행, `total=139 pushed=130 skipped_no_project=9 resource_errors=0
+  metering_errors=0` — 전건 성공(최상위 TRANSFORMERS wiring 누락만
+  있었음, 커밋 `f711fb6`으로 수정).
+- **⚠️ 미확인 잔여 리스크**: 이번 테스트 응답에 에러가 없어 실제 payload가
+  로그에 안 남았다 — 이번에 push된 130건 중 실제로 `On_demand`(종량제)
+  인스턴스가 있었는지 로그만으로는 확인 불가. legacy `.title()`과 동일하게
+  정규화 결과는 `"On_Demand"`(대문자 D)인데 THAAD 등록 상품 대부분은
+  `"On_demand"`(소문자 d)라 대소문자 불일치 가능성이 있다 — 이번 실행이
+  전부 Reserved 인스턴스였을 경우 이 리스크가 전혀 발동하지 않았을 수
+  있다. On_demand 인스턴스가 있는 기간으로 재검증하거나, THAAD DB에서
+  실제 생성된 레코드의 `nProductSeq`가 On_demand 계열 상품(195/197/199...)
+  을 포함하는지 확인 필요.
