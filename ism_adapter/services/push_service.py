@@ -26,6 +26,7 @@ class PushResult:
     total_usages: int
     pushed: int
     skipped_no_project: int
+    skipped_excluded: int
     resource_errors: int
     metering_errors: int
 
@@ -63,8 +64,13 @@ def push_resource_type(
     resource_items = []
     metering_items = []
     skipped = 0
+    excluded = 0
 
     for usage in usages:
+        if hasattr(transformer, "is_excluded") and transformer.is_excluded(usage):
+            excluded += 1
+            continue
+
         tenant_id = usage.get("tenant_id")
         project = projects.get(tenant_id) if tenant_id else None
         if project is None:
@@ -88,16 +94,18 @@ def push_resource_type(
         total_usages=len(usages),
         pushed=len(metering_items),
         skipped_no_project=skipped,
+        skipped_excluded=excluded,
         resource_errors=_count_errors(resource_results),
         metering_errors=_count_errors(metering_results),
     )
     logger.info(
         "Pushed resource_type={}: total={} pushed={} skipped_no_project={} "
-        "resource_errors={} metering_errors={}",
+        "skipped_excluded={} resource_errors={} metering_errors={}",
         result.resource_type,
         result.total_usages,
         result.pushed,
         result.skipped_no_project,
+        result.skipped_excluded,
         result.resource_errors,
         result.metering_errors,
     )
