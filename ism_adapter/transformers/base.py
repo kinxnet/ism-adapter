@@ -57,10 +57,15 @@ no_pay/insider_use는 이 push 스펙에 없다(THAAD 실측 확인 — no_pay�
 오직 `project.id`(contract_service_map.sServiceKey)와
 `project.provider_id`(metering.sProviderId)만 쓰인다.
 
-volume/instance/share처럼 mID에 스펙을 인코딩해야 하는 자원은 착수 시점에
-별도 변환기를 추가하기로 보류함(ism-adapter-project-decisions 메모리 참고).
+volume/instance/share처럼 mID에 여러 필드(size, IOPS, flavor 등)를 조합
+인코딩해야 하는 자원은 `EncodedMidResourceTransformer`(아래)를 쓴다 — 서브
+클래스가 `mid_fields`로 필드 조합 순서만 선언하면 legacy 포맷(예:
+`{resource_id}-size::{size}-mIOPS::{max_iops}`)과 동일한 mID 문자열을
+조립해준다. resource_item/metering_item 구성과 실제 자원(volume/instance/
+share) 연결은 각 자원의 후속 티켓에서 진행한다.
 """
 
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 import arrow
@@ -148,3 +153,37 @@ class SimpleResourceTransformer:
             resource_item=resource_item,
             metering_item=metering_item,
         )
+
+
+class EncodedMidResourceTransformer(ABC):
+    """mID에 여러 필드를 `-key::value` 형식으로 조합 인코딩해야 하는 자원
+    (volume, instance, share)을 위한 변환기 베이스.
+
+    legacy mID 포맷은 `{resource_id}` 뒤에 고정된 (label, usage 필드) 쌍을
+    선언 순서대로 `-label::value`로 이어붙인 구조다:
+        - volume: `{resource_id}-size::{size}-mIOPS::{max_iops}-bIOPS::{burst_iops}`
+        - instance: `{resource_id}-flavor::{flavor_id}-charge_type::{charge_type}`
+        - share: `{resource_id}-size::{size}`
+
+    서브클래스는 `mid_fields`에 `(label, usage_key)` 튜플을 순서대로 선언하면
+    `build_mid()`가 이 문자열을 조립해준다. resource_item/metering_item을
+    어떻게 구성할지는 자원마다 다를 수 있어(예: instance는 suspend 개념이
+    있음) 이 베이스에서 강제하지 않는다 — 서브클래스가 `to_resource_payload`
+    안에서 `build_mid()`를 호출해 mID를 채우고 나머지 payload를 구성한다.
+    """
+
+    resource_type: str
+    mid_fields: tuple[tuple[str, str], ...]
+
+    def build_mid(self, usage: dict) -> str:
+        segments = [usage["resource_id"]]
+        for label, usage_key in self.mid_fields:
+            segments.append(f"{label}::{usage[usage_key]}")
+        return "-".join(segments)
+
+    @abstractmethod
+    def to_resource_payload(self, usage: dict, project: ProjectInfo) -> ResourcePayload:
+        """`SimpleResourceTransformer.to_resource_payload`와 동일한 시그니처.
+
+        서브클래스가 `build_mid(usage)`로 mID를 조립하고 자원별
+        resource_item/metering_item을 구성해 구현한다."""
