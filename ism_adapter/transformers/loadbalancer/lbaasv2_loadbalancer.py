@@ -19,6 +19,17 @@ resource/metering item 구조 자체(mID 조합 방식을 제외한 나머지 �
 명시하기 때문이다(listener/pool 등 종속 자원은 별도 과금 없음, loadbalancer
 1개가 과금 단위).
 
+**resource_type 이중 표기 + lb_provider 필수** — 2026-10-02 dev 실전 검증
+중 발견: THAAD에 등록된 Load Balancer 상품(nProductSeq 236~239,
+Basic/Standard/Premium/CloudJ)은 `attribute.resource_type == "lbaas"`
+**그리고** `attribute.lb_provider`(각각 basic/standard/premium/cloudj)
+둘 다로 매칭한다. 기존 구현은 `resource_type`에 metering-api 쪽 내부 키
+이름(`"loadbalancer"`)을 그대로 썼고 `lb_provider`는 mID 접미사에만 넣고
+detail엔 아예 안 실어서 전건 "Product not found"로 실패했다
+(`share_snapshot`이 같은 이유로 `"nas_snapshot"`을 못 맞춰 실패했던 것과
+동일 패턴). detail의 `resource_type`은 `"lbaas"`로, `lb_provider`는 mID와
+동일하게 고정값 `"standard"`로 맞춘다.
+
 **KLB 연동 필터 — 현재는 스텁, 실제 KLB API 호출 없음**:
 
 legacy는 `ResourceLbaas.klb_id IS NULL` 조건으로 KLB(공유 로드밸런서)에
@@ -50,7 +61,9 @@ from ism_adapter.repositories import ProjectInfo
 from ism_adapter.transformers.base import ResourcePayload, _to_kst
 
 _RESOURCE_TYPE = "loadbalancer"
-_MID_SUFFIX = "-lbaas-provider::standard"
+_THAAD_RESOURCE_TYPE = "lbaas"
+_LB_PROVIDER = "standard"
+_MID_SUFFIX = f"-lbaas-provider::{_LB_PROVIDER}"
 
 
 class KlbLinkChecker(Protocol):
@@ -93,6 +106,11 @@ class LbaasV2LoadbalancerTransformer:
     def to_resource_payload(self, usage: dict, project: ProjectInfo) -> ResourcePayload:
         resource_id = usage["resource_id"]
         mid = f"{resource_id}{_MID_SUFFIX}"
+        # THAAD의 tResource.sValue는 NOT NULL이고 detail.display_name으로
+        # 채워진다 — display_name이 없는 LB(예: kube-service 자동 생성)가
+        # 실제로 있어 2026-10-02 dev 검증에서 insert 실패가 발생했다. legacy
+        # share.py가 쓰던 것과 동일한 폴백(없으면 resource_id)을 적용한다.
+        display_name = usage.get("display_name") or resource_id
 
         resource_item = {
             "service_type": "cloud",
@@ -112,8 +130,9 @@ class LbaasV2LoadbalancerTransformer:
                         "deleted_at": usage.get("deleted_at"),
                         "tenant_id": usage["tenant_id"],
                         "resource_id": resource_id,
-                        "display_name": usage.get("display_name"),
-                        "resource_type": _RESOURCE_TYPE,
+                        "display_name": display_name,
+                        "resource_type": _THAAD_RESOURCE_TYPE,
+                        "lb_provider": _LB_PROVIDER,
                     }
                 },
             },
@@ -136,9 +155,10 @@ class LbaasV2LoadbalancerTransformer:
                         "created_at": usage["created_at"],
                         "tenant_id": usage["tenant_id"],
                         "resource_id": resource_id,
-                        "display_name": usage.get("display_name"),
+                        "display_name": display_name,
                         "duration_sec": usage["durations"]["total"]["seconds"],
-                        "resource_type": _RESOURCE_TYPE,
+                        "resource_type": _THAAD_RESOURCE_TYPE,
+                        "lb_provider": _LB_PROVIDER,
                         "charge_type": "Reserved",
                     }
                 },

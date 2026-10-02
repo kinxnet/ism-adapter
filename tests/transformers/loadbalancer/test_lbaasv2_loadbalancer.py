@@ -59,14 +59,13 @@ def test_resource_item_uses_composed_mid():
     payload = LbaasV2LoadbalancerTransformer().to_resource_payload(_USAGE, _PROJECT)
 
     assert payload.resource_item["resource"]["mID"] == payload.mid
-    assert (
-        payload.resource_item["resource"]["arDetailInfo"]["detail"]["resource_type"]
-        == "loadbalancer"
-    )
-    assert (
-        payload.resource_item["resource"]["arDetailInfo"]["detail"]["resource_id"]
-        == _RESOURCE_ID
-    )
+    detail = payload.resource_item["resource"]["arDetailInfo"]["detail"]
+    # THAAD에 등록된 상품(nProductSeq 236~239)의 attribute.resource_type과
+    # 일치해야 하는 값 — 내부 키 이름("loadbalancer")과 다르다.
+    assert detail["resource_type"] == "lbaas"
+    # attribute.lb_provider와도 매칭되어야 한다(mID 접미사와 동일한 고정값).
+    assert detail["lb_provider"] == "standard"
+    assert detail["resource_id"] == _RESOURCE_ID
 
 
 def test_metering_item_sresourceid_matches_mid():
@@ -75,6 +74,10 @@ def test_metering_item_sresourceid_matches_mid():
     assert payload.metering_item["metering"]["sResourceId"] == payload.mid
     assert payload.metering_item["metering"]["nActiveSec"] == 2592000
     assert payload.metering_item["metering"]["nSuspendSec"] == 0
+
+    detail = payload.metering_item["metering"]["arDetailInfo"]["detail"]
+    assert detail["resource_type"] == "lbaas"
+    assert detail["lb_provider"] == "standard"
 
 
 def test_default_klb_checker_never_links_anything():
@@ -109,3 +112,17 @@ def test_klb_link_checker_protocol_is_satisfied_by_default_impl():
     checker: KlbLinkChecker = _NoOpKlbLinkChecker()
 
     assert checker.is_klb_linked(_RESOURCE_ID) is False
+
+
+def test_null_display_name_falls_back_to_resource_id():
+    """THAAD tResource.sValue는 NOT NULL이고 detail.display_name으로
+    채워진다 — display_name이 없는 LB(kube-service 자동 생성 등 실제
+    존재, 2026-10-02 dev 검증에서 insert 실패로 확인)는 resource_id로
+    대체해야 한다(legacy share.py와 동일 폴백)."""
+    usage = {**_USAGE, "display_name": None}
+    payload = LbaasV2LoadbalancerTransformer().to_resource_payload(usage, _PROJECT)
+
+    resource_detail = payload.resource_item["resource"]["arDetailInfo"]["detail"]
+    metering_detail = payload.metering_item["metering"]["arDetailInfo"]["detail"]
+    assert resource_detail["display_name"] == _RESOURCE_ID
+    assert metering_detail["display_name"] == _RESOURCE_ID
