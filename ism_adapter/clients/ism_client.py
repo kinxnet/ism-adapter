@@ -7,12 +7,23 @@
 ism/metering.py)가 20건씩 나눠 보내는 것은 "한 POST 요청 body에 최대 20개
 짜리 JSON 배열을 담아 보낸다"는 뜻이며, 20번 개별 POST가 아니다.
 
+**2026-10-02 실측 정정 — 배치 안에 에러가 섞이면 HTTP 상태코드도 400이
+된다.** 이전 가정("개별 에러는 HTTP 상태코드에 안 섞인다")은 dev 환경
+실제 push(THAAD에 Contract 미등록 project가 섞인 배치)로 재확인한 결과
+틀렸다 — THAAD는 배치 중 하나라도 실패하면 전체 응답 상태를 400으로
+내리면서도, 본문에는 성공/실패가 섞인 리스트를 그대로 담아 돌려준다.
+`send_request()`가 `raise_for_status()`를 먼저 호출해버리면 이 본문(성공
+건 포함)이 전부 유실되고 예외로 크래시한다 — `_send_list_request()`가
+이 400+리스트 조합만 예외로 취급하지 않고 결과로 복원한다(그 외 상태
+코드/파싱 불가 본문은 그대로 올림, 진짜 장애와 구분하기 위함).
+
 ISM API는 인증 헤더가 없다(2026-09-15 조사 확인 — TLS 검증도 꺼져 있고
 사내망 위치가 유일한 접근 통제로 보임). 이 무인증 방식을 그대로 이어받을지는
 별도로 인프라/보안팀과 상의가 필요하다(ism-adapter-project-decisions 메모리
 참고) — 이 클라이언트는 일단 legacy와 동일하게 인증 없이 호출한다.
 """
 
+import httpx
 from loguru import logger
 
 from ism_adapter.core.rest_client import RestClient
@@ -30,9 +41,8 @@ class ISMClient(RestClient):
         원소가 항상 1개, 20건 배치가 아님). 반복/실패 시 중단 여부는 호출부
         (account_service.py, 2026-09-17부터 첫 실패 시 즉시 중단)가 담당한다.
         """
-        res = self.send_request("POST", "/accounts", json=[item])
-        result = res.json()
-        return result[0] if isinstance(result, list) else result
+        result = self._send_list_request("/accounts", [item])
+        return result[0] if result else {}
 
     def put_contract(self, item: dict) -> dict:
         """계약 1건 등록/갱신.
@@ -44,9 +54,8 @@ class ISMClient(RestClient):
         (contract_service.py)도 이 방식(첫 실패 시 즉시 중단)을 그대로
         재현한다(account push와도 통일됨).
         """
-        res = self.send_request("POST", "/contracts", json=[item])
-        result = res.json()
-        return result[0] if isinstance(result, list) else result
+        result = self._send_list_request("/contracts", [item])
+        return result[0] if result else {}
 
     def put_resources(self, items: list[dict]) -> list[dict]:
         """자원 등록/속성 갱신. 각 item은 transformer가 만든
@@ -67,9 +76,7 @@ class ISMClient(RestClient):
         results: list[dict] = []
         for i in range(0, len(items), _BATCH_SIZE):
             batch = items[i : i + _BATCH_SIZE]
-            res = self.send_request("POST", path, json=batch)
-            batch_result = res.json()
-            results.extend(batch_result if isinstance(batch_result, list) else [batch_result])
+            results.extend(self._send_list_request(path, batch))
             logger.info(
                 "Pushed batch {}-{} of {} to ISM {}",
                 i,
@@ -79,3 +86,32 @@ class ISMClient(RestClient):
             )
 
         return results
+
+    def _send_list_request(self, path: str, items: list[dict]) -> list[dict]:
+        """`items`를 JSON 배열로 POST하고, 결과를 항상 리스트로 반환한다.
+
+        THAAD가 배치 중 일부만 실패해도 HTTP 상태 자체를 400으로 내리는
+        경우(모듈 docstring 참고)를 예외로 취급하지 않고, 본문의 리스트를
+        그대로 결과로 쓴다 — 그래야 같은 배치 안의 성공 건이 유실되지
+        않는다. 400이 아니거나 본문이 리스트가 아니면(진짜 장애) 그대로
+        예외를 올린다.
+        """
+        try:
+            res = self.send_request("POST", path, json=items)
+            body = res.json()
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code != 400:
+                raise
+            try:
+                body = e.response.json()
+            except ValueError:
+                raise e from None
+            if not isinstance(body, list):
+                raise e from None
+            logger.warning(
+                "ISM {} 배치에 실패 항목이 섞여 HTTP 400이 반환됨 — "
+                "본문의 {}건 결과(성공 포함)는 그대로 사용합니다",
+                path,
+                len(body),
+            )
+        return body if isinstance(body, list) else [body]
