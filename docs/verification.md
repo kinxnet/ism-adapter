@@ -272,11 +272,15 @@ ism-adapter의 `is_excluded` 훅과 `detect_os_db()` 포팅으로 전부 구현�
   걸러져 `pushed=0 skipped_excluded=115 resource_errors=0
   metering_errors=0`.** 잘못 push되던 것(Product not found 에러)이 전부
   제외로 바뀐 것은 확인했다.
-- **⚠️ 미확인 잔여 리스크**: dev 환경에 Windows os_image 데이터 자체가
-  없어(2026-01-01~2026-10-02 전체 조회로 확인, 115건 전부 `os_type=linux`)
-  **Windows 이미지가 실제로 THAAD에 성공적으로 매칭·생성되는 happy path는
-  검증하지 못했다.** `is_excluded`가 비Windows를 올바르게 거르는 것만
-  확인된 상태다. THAAD의 os_image/Windows 라이선스 상품 카탈로그(카테고리
-  미확인)에서 실제 속성명이 `windows_type`/`server_type`/`server_version`/
-  `sql_type`/`sql_version`과 정확히 일치하는지도 아직 확인 전이다 — 카탈로그
-  조회 후 속성명 재확인 필요.
+- **⚠️ happy path 미검증(환경 제약, 코드 문제 아님)**: dev 환경에 Windows
+  os_image 데이터 자체가 없어(2026-01-01~2026-10-02 전체 조회로 확인,
+  115건 전부 `os_type=linux`) **Windows 이미지가 실제로 THAAD에 성공적으로
+  매칭·생성되는 happy path는 검증하지 못했다.** 인스턴스 생성 시 이미지
+  선택지에도 Windows 자체가 없어, dev에서 테스트용 Windows 인스턴스를 새로
+  만드는 것도 불가능함을 확인했다 — dev 이미지 카탈로그에 Windows 이미지가
+  등록돼 있지 않은 구조적 제약이다.
+- **마무리 결정**: 이 환경 제약 때문에 THAAD 카탈로그 쪽 속성명 대조 포함한
+  실전 happy path 검증은 보류하고, `is_excluded` 필터링(비Windows 거름)과
+  `detect_os_db()` 파생 로직은 단위테스트(`tests/transformers/compute/test_os_image.py`)
+  커버리지로 갈음하기로 결정했다(2026-10-02). Windows 이미지가 dev에
+  등록되는 시점이 생기면 그때 실전 재검증한다.
