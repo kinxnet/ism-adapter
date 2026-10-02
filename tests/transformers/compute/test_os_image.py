@@ -23,7 +23,7 @@ _USAGE = {
     "max_ended_at": "2026-08-31T00:00:00+00:00",
     "durations": {"total": {"seconds": 2592000}},
     "base_image_ref": "image-ref-uuid",
-    "base_image_name": "windows2019std",
+    "base_image_name": "Windows2019_Std",
     "os_type": "windows",
 }
 
@@ -89,11 +89,68 @@ def test_detail_carries_image_reference_fields_on_both_items():
 
     for detail in (resource_detail, metering_detail):
         assert detail["base_image_ref"] == "image-ref-uuid"
-        assert detail["base_image_name"] == "windows2019std"
+        assert detail["base_image_name"] == "Windows2019_Std"
         assert detail["os_type"] == "windows"
 
-    # legacy의 detect_os_db 기반 windows_type/server_type/sql_type 파싱은
-    # 미터링/어댑터 영역이 아니므로(legacy-metering-analysis.md) 넣지 않는다.
-    assert "windows_type" not in resource_detail
-    assert "server_type" not in resource_detail
-    assert "sql_type" not in metering_detail
+
+def test_detail_carries_windows_license_attributes_derived_from_image_name():
+    """THAAD 상품 매칭에 쓰이는 windows_type/server_type/server_version을
+    `base_image_name`에서 파생해 양쪽 detail에 싣는다(legacy
+    `detect_os_db()` 포팅, `Windows2019_Std` -> server/standard/2019)."""
+    payload = OsImageTransformer().to_resource_payload(_USAGE, _PROJECT)
+
+    resource_detail = payload.resource_item["resource"]["arDetailInfo"]["detail"]
+    metering_detail = payload.metering_item["metering"]["arDetailInfo"]["detail"]
+
+    for detail in (resource_detail, metering_detail):
+        assert detail["windows_type"] == "server"
+        assert detail["server_type"] == "standard"
+        assert detail["server_version"] == "2019"
+        assert detail["sql_type"] is None
+        assert detail["sql_version"] is None
+
+
+def test_windows10_image_name_is_desktop_type():
+    usage = {**_USAGE, "base_image_name": "windows10"}
+    payload = OsImageTransformer().to_resource_payload(usage, _PROJECT)
+
+    detail = payload.resource_item["resource"]["arDetailInfo"]["detail"]
+    assert detail["windows_type"] == "desktop"
+
+
+def test_missing_image_name_falls_back_to_legacy_defaults():
+    """legacy는 가격표/이미지명 둘 다 없으면 windows_type=server,
+    server_type=standard로 기본값 처리한다(server_version 등은 None)."""
+    usage = {**_USAGE, "base_image_name": None}
+    payload = OsImageTransformer().to_resource_payload(usage, _PROJECT)
+
+    detail = payload.resource_item["resource"]["arDetailInfo"]["detail"]
+    assert detail["windows_type"] == "server"
+    assert detail["server_type"] == "standard"
+    assert detail["server_version"] is None
+
+
+def test_is_excluded_skips_non_windows_os_type():
+    usage = {**_USAGE, "os_type": "linux"}
+    assert OsImageTransformer().is_excluded(usage) is True
+
+
+def test_is_excluded_accepts_known_windows_typos():
+    """legacy 쿼리의 오타(windosw/winddows/window)까지 그대로 허용 대상."""
+    for os_type in ("windosw", "winddows", "window", "windows"):
+        usage = {**_USAGE, "os_type": os_type}
+        assert OsImageTransformer().is_excluded(usage) is False
+
+
+def test_is_excluded_skips_custom_images():
+    usage = {**_USAGE, "base_image_name": "custom-golden-image"}
+    assert OsImageTransformer().is_excluded(usage) is True
+
+
+def test_is_excluded_skips_free_tenant():
+    usage = {**_USAGE, "tenant_id": "d836600491664000b23268ed0fb85655"}
+    assert OsImageTransformer().is_excluded(usage) is True
+
+
+def test_is_excluded_false_for_ordinary_windows_usage():
+    assert OsImageTransformer().is_excluded(_USAGE) is False
