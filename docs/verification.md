@@ -193,6 +193,18 @@ WHERE sResourceId = '<push한 mID와 동일값>';
 - **2026-10-02(3차, 수정 후)**: `total=45 pushed=41 resource_errors=0
   metering_errors=0` — 전건 성공(nResourceSeq 426077~426095 등).
 
+### share(NAS) push — 실전 검증 기록
+
+THAAD 상품(nProductSeq=351, "NAS Standard", 카테고리 86)은
+`attribute.resource_type=="nas"` **그리고** `attribute.share_type_id`(8개
+UUID + `null`)로 매칭한다. metering-api `ShareMeteringDTO`에는
+`share_type_id` 필드 자체가 없어(size_gib만 존재) 저희 payload엔 이 키가
+아예 없는데, THAAD가 `null`을 목록에 포함해둬서 매칭이 그대로 통과됐다.
+
+- **2026-10-02**: `resources --resource-type=share` 실행,
+  `total=31 pushed=31 resource_errors=0 metering_errors=0` — 수정 없이
+  전건 성공.
+
 ## volume push — 실전 검증 기록
 
 - **2026-10-02(1차)**: `resources --resource-type=volume` 실행,
