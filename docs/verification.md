@@ -106,3 +106,61 @@ LIMIT 40;
   (nAccountSeq=4590, 4591 등) 및 매핑을 직접 확인함. tAccountMember는 push
   이후에도 해당 nAccountSeq로 신규 레코드가 생기지 않아 "반영 안 됨" 판단을
   재확인.
+
+## resource/metering push 공통 (`ism_adapter.cli resources --resource-type=...`)
+
+### 영향받는 테이블
+
+| 테이블 | 역할 |
+|---|---|
+| `CONTRACT.tResource` | 자원 등록(mID 기준 upsert) |
+| `AGGREGATE.tCloudMetering` | 일별 사용량(metering push, resource 선등록 필요) |
+
+### ⚠️ 공용 클라이언트 버그 발견 및 수정 (2026-10-02)
+
+volume_snapshot 실전 검증 중 발견: THAAD는 배치(최대 20건) 중 **일부 항목만
+실패해도 전체 HTTP 상태코드를 그 실패의 severity로 내린다**(Contract
+미등록 `ServiceMap not found`는 400, 등록 안 된 product를 가리키는
+`Product not found`는 500) — 본문엔 성공/실패가 섞인 리스트를 그대로
+담고 있는데도. 기존 `ism_client.py`는 `raise_for_status()`를 먼저 호출해
+이 경우 본문(성공 건 포함)을 전부 버리고 예외로 크래시했다(network/router
+때부터 있던 버그 — 그동안 "전건 성공"만 겪어서 안 드러남). `_send_list_request()`가
+400/500 + 리스트 본문 조합만 예외로 취급하지 않고 복원하도록 수정함
+(PR #20, 커밋 `31e85da`/`49bf3d6`).
+
+### 검증 쿼리
+
+```sql
+SELECT nResourceSeq, mID, dtStart, dtEnd, dtCreate
+FROM CONTRACT.tResource
+WHERE mID = '<push한 mID>';
+
+SELECT nMeteringSeq, sResourceId, nActiveSec, dtPeriodStart, dtPeriodEnd
+FROM AGGREGATE.tCloudMetering
+WHERE sResourceId = '<push한 mID와 동일값>';
+```
+
+### volume_snapshot push — 실전 검증 기록
+
+- **2026-10-02**: dev metering-api → stage THAAD(testbed, dev DB 기준),
+  `resources --resource-type=volume_snapshot --period-start=2026-08-01 --period-end=2026-10-02`
+  실행. `total=13 pushed=13 resource_errors=10 metering_errors=10` — 10건은
+  Contract 미등록(알려진 상태), 3건은 실제 THAAD 레코드 생성 확인
+  (nResourceSeq 425480~425482).
+
+## volume push — 실전 검증 기록
+
+- **2026-10-02(1차)**: `resources --resource-type=volume` 실행,
+  `total=670 pushed=582 resource_errors=582`(=pushed와 동일, 즉 전건 실패).
+  에러 분류: `ServiceMap not found` 133건(Contract 미등록, 기존과 동일),
+  `Product not found` 449건(신규 발견) — dev 환경의 volume_type_id 3종
+  (`322b5d33-...`=supreme, `75f571a5-...`=standard, `d4cb3034-...`=premium,
+  metering-api `volume_history`로 확인)이 THAAD `tProduct`(229 Standard/
+  230 Premium/231 Supreme)의 `arExtendSet.attribute.volume_type_id` 목록
+  어디에도 없었음 — dev와 testbed 카탈로그가 서로 다른 OpenStack 배포의
+  volume_type UUID를 기준으로 했기 때문(이름은 같으나 ID가 다름).
+- **2026-10-02(2차, 카탈로그 보정 후)**: 사용자가 위 3개 UUID를 각 상품의
+  `arExtendSet.attribute.volume_type_id`에 `JSON_ARRAY_APPEND`로 추가 등록.
+  재실행 결과 `total=670 pushed=582 resource_errors=133 metering_errors=133`
+  — `Product not found` 완전히 해소(449→0), 449건 실제 THAAD 레코드 생성
+  확인(nResourceSeq 425483 이후). 남은 133건은 Contract 미등록(알려진 상태).
