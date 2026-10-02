@@ -73,7 +73,9 @@ class TestShareSnapshotTransformer:
         assert detail["tenant_id"] == "tenant-001"
         assert detail["resource_id"] == "share-snapshot-789"
         assert detail["display_name"] == "snapshot-1"
-        assert detail["resource_type"] == "share_snapshot"
+        # THAAD에 등록된 상품(nProductSeq=352)의 attribute.resource_type과
+        # 일치해야 하는 값 — 내부 키 이름(share_snapshot)과 다르다.
+        assert detail["resource_type"] == "nas_snapshot"
 
     def test_metering_item_structure(
         self,
@@ -112,7 +114,7 @@ class TestShareSnapshotTransformer:
         assert detail["resource_id"] == "share-snapshot-789"
         assert detail["display_name"] == "snapshot-1"
         assert detail["duration_sec"] == 86400
-        assert detail["resource_type"] == "share_snapshot"
+        assert detail["resource_type"] == "nas_snapshot"
         assert detail["charge_type"] == "Reserved"
 
     def test_deleted_resource(
