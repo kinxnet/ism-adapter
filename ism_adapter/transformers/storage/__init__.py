@@ -4,3 +4,11 @@
 자원 없음 — volume은 mID 스펙 인코딩(size/IOPS)이 필요해 착수 시점에 별도
 설계 필요(ism-adapter-project-decisions 메모리 참고).
 """
+
+from ism_adapter.transformers.storage.volume_snapshot import VolumeSnapshotTransformer
+
+TRANSFORMERS = {
+    "volume_snapshot": VolumeSnapshotTransformer(),
+}
+
+__all__ = ["VolumeSnapshotTransformer", "TRANSFORMERS"]
