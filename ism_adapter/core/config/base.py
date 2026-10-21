@@ -43,7 +43,7 @@ class DatabaseConfig(BaseSettings):
     계약 push 개발/검증이 가능해야 한다는 사용자 결정(2026-09-17)에 따라,
     비어있으면 validate_config에서 죽이지 않고 discount만 빈 배열로 폴백한다
     (contract_repository.py에서 처리 예정). prod KMS 경로는 아직 확인 안 됨 —
-    portal-db(common/databases/portal-db)와 동일 패턴일 것으로 예상되나 착수 시
+    portal DB(service/common/database/portal)와 동일 패턴일 것으로 예상되나 착수 시
     실제 경로 확인 필요.
     """
 
@@ -58,7 +58,7 @@ class SentryConfig(BaseSettings):
 class EndpointConfig(BaseSettings):
     """metering_api/ism_api는 환경(dev/stage/prod)마다 값이 달라 KMS가 아닌
     환경변수(METERING_API_HOST / ISM_API_HOST, Helm values env)로 주입한다.
-    master_apikey만 공통 시크릿이라 KMS(common/api-keys)에서 로드한다.
+    master_apikey만 공통 시크릿이라 KMS(service/common/api-key)에서 로드한다.
     """
 
     metering_api: str = Field(default="")
@@ -150,18 +150,18 @@ def _load_secrets(config: Settings) -> None:
     필수 필드가 비어있으면 validate_config()가 기동 시점에 명확히 죽인다.
     """
     try:
-        # ⚠️ 이 KMS 경로(common/databases/portal-db)는 ixcs-api-service가 쓰는
+        # ⚠️ 이 KMS 경로(service/common/database/portal)는 ixcs-api-service가 쓰는
         # 것과 동일한 일반(쓰기 가능) 계정이다 — project 테이블 전용 읽기 전용
         # 계정이 별도로 존재하지 않는다(2026-09-15 확인). 즉 "이 서비스는
         # project 테이블에 쓰지 않는다"는 지금은 DB 권한이 아니라 코드 레벨
         # 약속일 뿐이다. repositories/project_repository.py 밖에서 이 엔진으로
         # 쓰기 쿼리를 실행하지 않도록 각별히 주의할 것 — 별도 읽기 전용 계정
         # 발급은 ism-adapter-project-decisions 메모리에 후속 과제로 남겨둔다.
-        db = get_secret("common/databases/portal-db")
+        db = get_secret("service/common/database/portal")
         if isinstance(db, dict):
             host = db.get("host")
             port = db.get("port")
-            user = db.get("user")
+            user = db.get("username")
             password = db.get("password")
             database = db.get("database")
             if all(
@@ -172,20 +172,24 @@ def _load_secrets(config: Settings) -> None:
                     f"@{host}:{port}/{database}"
                 )
             else:
-                logger.warning("KMS: missing fields in 'common/databases/portal-db'")
+                logger.warning(
+                    "KMS: missing fields in 'service/common/database/portal'"
+                )
         else:
-            logger.warning("KMS: No data returned for 'common/databases/portal-db'")
+            logger.warning("KMS: No data returned for 'service/common/database/portal'")
     except Exception as e:
-        logger.warning("Failed to load 'common/databases/portal-db' from KMS: {}", e)
+        logger.warning(
+            "Failed to load 'service/common/database/portal' from KMS: {}", e
+        )
 
     try:
         # billing_url은 옵션(2026-09-17 결정) — 실패해도 warning만 남기고
         # 계약 push는 discount를 빈 배열로 폴백해 계속 동작한다.
-        db = get_secret("common/databases/billing-db")
+        db = get_secret("service/common/database/billing")
         if isinstance(db, dict):
             host = db.get("host")
             port = db.get("port")
-            user = db.get("user")
+            user = db.get("username")
             password = db.get("password")
             database = db.get("database")
             if all(
@@ -196,20 +200,28 @@ def _load_secrets(config: Settings) -> None:
                     f"@{host}:{port}/{database}"
                 )
             else:
-                logger.warning("KMS: missing fields in 'common/databases/billing-db'")
+                logger.warning(
+                    "KMS: missing fields in 'service/common/database/billing'"
+                )
         else:
-            logger.warning("KMS: No data returned for 'common/databases/billing-db'")
+            logger.warning(
+                "KMS: No data returned for 'service/common/database/billing'"
+            )
     except Exception as e:
-        logger.warning("Failed to load 'common/databases/billing-db' from KMS: {}", e)
+        logger.warning(
+            "Failed to load 'service/common/database/billing' from KMS: {}", e
+        )
 
     try:
-        master_apikey = get_secret("common/api-keys", "master_apikey")
+        master_apikey = get_secret("service/common/api-key", "master-api-key")
         if isinstance(master_apikey, str) and master_apikey:
             config.app.master_apikey = master_apikey
         else:
-            logger.warning("KMS: 'master_apikey' not found in 'common/api-keys'")
+            logger.warning(
+                "KMS: 'master-api-key' not found in 'service/common/api-key'"
+            )
     except Exception as e:
-        logger.warning("Failed to load 'common/api-keys' from KMS: {}", e)
+        logger.warning("Failed to load 'service/common/api-key' from KMS: {}", e)
 
     _load_endpoint_hosts(config)
 
@@ -222,11 +234,11 @@ def validate_config(config: Settings) -> None:
     errors: list[str] = []
     if not config.database.portal_url:
         errors.append(
-            "database.portal_url (KMS common/databases/portal-db) is not set"
+            "database.portal_url (KMS service/common/database/portal) is not set"
         )
     if not config.app.master_apikey:
         errors.append(
-            "app.master_apikey (KMS common/api-keys.master_apikey) is not set"
+            "app.master_apikey (KMS service/common/api-key.master-api-key) is not set"
         )
     if not config.endpoint.metering_api:
         errors.append("endpoint.metering_api (env METERING_API_HOST) is not set")

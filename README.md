@@ -67,10 +67,10 @@
 
 | 변수 | KMS 경로 | 용도 |
 |------|---------|------|
-| `app.master_apikey` | `common/api-keys` → `master_apikey` | metering-api 호출 인증(`IXcloud-Apikey` 헤더) |
-| `database.portal_url` | `common/databases/portal-db` → `host`/`port`/`user`/`password`/`database` | `portal_db`(project 테이블) 접속 문자열 조립 |
+| `app.master_apikey` | `service/common/api-key` → `master-api-key` | metering-api 호출 인증(`IXcloud-Apikey` 헤더) |
+| `database.portal_url` | `service/common/database/portal` → `host`/`port`/`username`/`password`/`database` | `portal_db`(project 테이블) 접속 문자열 조립 |
 
-⚠️ `common/databases/portal-db`는 ixcs-api-service와 동일한 일반(쓰기 가능)
+⚠️ `service/common/database/portal`는 ixcs-api-service와 동일한 일반(쓰기 가능)
 계정이다 — project 테이블 전용 읽기 전용 계정이 별도로 없다(2026-09-15 확인).
 이 서비스가 project 테이블에 쓰지 않는 것은 지금은 DB 권한이 아니라 코드
 레벨(`repositories/project_repository.py`만 이 연결을 사용) 약속일 뿐이다.
