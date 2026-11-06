@@ -67,7 +67,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
 
     subparsers.add_parser(
-        "contracts", help="계약 push (provider/account 조건을 만족하는 전체 project 대상, 기간 없음)"
+        "contracts",
+        help="계약 push (provider/account 조건을 만족하는 전체 project 대상, 기간 없음)",
     )
 
     resources_parser = subparsers.add_parser(
@@ -110,7 +111,9 @@ def _run_contracts(args: argparse.Namespace) -> int:
 
     billing_engine = None
     if settings.database.billing_url:
-        billing_engine = create_engine(settings.database.billing_url, pool_pre_ping=True)
+        billing_engine = create_engine(
+            settings.database.billing_url, pool_pre_ping=True
+        )
     else:
         logger.warning(
             "database.billing_url is not set — discount 없이 계약 push를 진행합니다"

@@ -51,8 +51,12 @@ def push_contracts(
         try:
             result = ism_client.put_contract(payload)
         except Exception as e:
-            logger.error("Failed to push project_id={} to ISM: {}", project.project_id, e)
-            raise ContractPushError(f"project_id={project.project_id} push failed") from e
+            logger.error(
+                "Failed to push project_id={} to ISM: {}", project.project_id, e
+            )
+            raise ContractPushError(
+                f"project_id={project.project_id} push failed"
+            ) from e
 
         if isinstance(result, dict) and result.get("error"):
             logger.error(

@@ -37,7 +37,11 @@ legacy 자원 타입 키(예: 'instances')를 ism-adapter 자원 타입(예: 'in
 
 import arrow
 
-from ism_adapter.repositories.contract_repository import DiscountInfo, ProjectContractInfo, StabilizationInfo
+from ism_adapter.repositories.contract_repository import (
+    DiscountInfo,
+    ProjectContractInfo,
+    StabilizationInfo,
+)
 
 _KST = "Asia/Seoul"
 
@@ -86,7 +90,9 @@ def _month_end_kst() -> str:
     return arrow.utcnow().to(_KST).span("month")[1].format("YYYY-MM-DD")
 
 
-def _resolve_status_and_end(project: ProjectContractInfo) -> tuple[str, str, str | None]:
+def _resolve_status_and_end(
+    project: ProjectContractInfo,
+) -> tuple[str, str, str | None]:
     """(sStatus, dtEnd, dtStatus) 반환."""
     if project.is_deleted == 1:
         dt_end = _to_kst_date(project.deleted_at) or _month_end_kst()

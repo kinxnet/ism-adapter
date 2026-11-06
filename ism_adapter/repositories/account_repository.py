@@ -126,7 +126,9 @@ class AccountRepository:
             rows = conn.execute(stmt).mappings().all()
         return {row["id"]: dict(row) for row in rows}
 
-    def _get_members_by_account(self, account_ids: list[str]) -> dict[str, list[MemberInfo]]:
+    def _get_members_by_account(
+        self, account_ids: list[str]
+    ) -> dict[str, list[MemberInfo]]:
         """user.confirm == 1인 멤버만. role.is_master 여부도 함께 가져와서
         상위(account_service.py)에서 master 선정에 쓸 수 있게 한다.
 

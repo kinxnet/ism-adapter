@@ -85,7 +85,9 @@ def _mk_account_members(members: list[MemberInfo]) -> list[dict]:
         ]
     else:
         account_members = [
-            _mk_member_item(member, _DUTY_BILLING if member.accounting == 1 else _DUTY_BUSINESS)
+            _mk_member_item(
+                member, _DUTY_BILLING if member.accounting == 1 else _DUTY_BUSINESS
+            )
             for member in members
         ]
 
@@ -109,7 +111,9 @@ class AccountTransformer:
                 "sPassword": master.hashed_password,
                 "sSalt": master.salt,
                 "sCustomerType": "A",
-                "dtRegister": arrow.get(account.created_at).format("YYYY-MM-DD HH:mm:ss"),
+                "dtRegister": arrow.get(account.created_at).format(
+                    "YYYY-MM-DD HH:mm:ss"
+                ),
                 "sStatus": status,
                 "sPaymentKey": account.payment_key,
                 "sRemark": "클라우드 자동등록",

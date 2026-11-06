@@ -88,8 +88,13 @@ class ContractRepository:
                 contract_project_table.c.no_pay,
             )
             .select_from(contract_project_table)
-            .join(provider_table, provider_table.c.id == contract_project_table.c.provider_id)
-            .join(account_table, account_table.c.id == contract_project_table.c.account_id)
+            .join(
+                provider_table,
+                provider_table.c.id == contract_project_table.c.provider_id,
+            )
+            .join(
+                account_table, account_table.c.id == contract_project_table.c.account_id
+            )
             .where(
                 provider_table.c.is_deleted == 0,
                 account_table.c.is_active == 1,
@@ -123,7 +128,9 @@ class ContractRepository:
             for row in rows
         ]
 
-    def _get_stabilizations(self, project_ids: list[str]) -> dict[str, list[StabilizationInfo]]:
+    def _get_stabilizations(
+        self, project_ids: list[str]
+    ) -> dict[str, list[StabilizationInfo]]:
         """legacy `mk_stabilization()`: project_id로 stabilization_project 조회,
         필터 없이 전부 가져온다(resource_type=='lbs' 제외는 transformer가 담당 —
         legacy도 조회가 아니라 payload 조합 단계에서 걸렀다).

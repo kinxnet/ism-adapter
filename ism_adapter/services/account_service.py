@@ -56,8 +56,12 @@ def push_accounts(
         try:
             result = ism_client.put_account(payload)
         except Exception as e:
-            logger.error("Failed to push account_id={} to ISM: {}", account.account_id, e)
-            raise AccountPushError(f"account_id={account.account_id} push failed") from e
+            logger.error(
+                "Failed to push account_id={} to ISM: {}", account.account_id, e
+            )
+            raise AccountPushError(
+                f"account_id={account.account_id} push failed"
+            ) from e
 
         if isinstance(result, dict) and result.get("error"):
             logger.error(

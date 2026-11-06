@@ -101,7 +101,9 @@ class Settings(BaseSettings):
                         "set (****)" if self.database.portal_url else "not set"
                     ),
                     "billing_url": (
-                        "set (****)" if self.database.billing_url else "not set (optional)"
+                        "set (****)"
+                        if self.database.billing_url
+                        else "not set (optional)"
                     ),
                 },
                 "endpoint_config": {
@@ -164,9 +166,7 @@ def _load_secrets(config: Settings) -> None:
             user = db.get("username")
             password = db.get("password")
             database = db.get("database")
-            if all(
-                v not in (None, "") for v in (host, port, user, password, database)
-            ):
+            if all(v not in (None, "") for v in (host, port, user, password, database)):
                 config.database.portal_url = (
                     f"mysql+pymysql://{user}:{quote_plus(str(password))}"
                     f"@{host}:{port}/{database}"
@@ -192,9 +192,7 @@ def _load_secrets(config: Settings) -> None:
             user = db.get("username")
             password = db.get("password")
             database = db.get("database")
-            if all(
-                v not in (None, "") for v in (host, port, user, password, database)
-            ):
+            if all(v not in (None, "") for v in (host, port, user, password, database)):
                 config.database.billing_url = (
                     f"mysql+pymysql://{user}:{quote_plus(str(password))}"
                     f"@{host}:{port}/{database}"
